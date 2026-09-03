@@ -5,6 +5,21 @@ import type { BenchCase } from './harness.js';
  * adversarial on the clean side: it includes risky-looking-but-correct changes (big refactors with a
  * no-API-change claim, tests that call helpers without a literal assert) that a naive checker would
  * false-flag. The real MSR'26 PR-MCI labeled set plugs in alongside these (see bench/README.md).
+ *
+ * NOTE on `risky-diff-no-test`: it has NO entries here, by design. The harness scores only the
+ * blocking signal (flagged = CONTRADICTED > 0), and `risky-diff-no-test` is UNVERIFIED-only — it can
+ * never flip a case's TP/TN/FP/FN outcome, so it has nothing to prove in this corpus. Its behavior is
+ * covered by unit tests instead (test/riskyDiffNoTest.test.ts). It is exercised *incidentally* by some
+ * cases below (e.g. the `token` constant in C9/D11 emits a 🟡), which confirms it stays non-blocking.
+ *
+ * NOTE on generated-path skipping: no corpus case uses a generated/build-output path (dist/, *.min.js,
+ * …), so `risky-diff-no-test`'s generated-path skip (src/paths.ts) is a no-op on this corpus — the
+ * 20/20 result is unaffected. The skip is verified by unit tests instead.
+ *
+ * NOTE on `comment-code-drift`: like `risky-diff-no-test` it is UNVERIFIED-only (never CONTRADICTED),
+ * so it has no corpus entries and cannot change a case's TP/TN/FP/FN outcome. It also requires a base
+ * ref to compare against, which the corpus's `BASE`-suffixed cases do provide, but its behavior is
+ * covered by unit tests instead (test/commentCodeDrift.test.ts).
  */
 export const cases: BenchCase[] = [
   // ───────────────────────── defects (expect ≥1 CONTRADICTED) ─────────────────────────
@@ -183,5 +198,45 @@ export const cases: BenchCase[] = [
     base: 'BASE',
     changed: [{ path: 'src/net.ts' }],
     claims: ['no-default-flip'],
+  },
+
+  // ───────────────── adversarial: real refactors that must NOT false-fire ─────────────────
+  {
+    id: 'C9-move-export-between-changed-files',
+    label: 'clean',
+    description:
+      'Refactor moves `export const TOKEN` from src/a.ts to src/b.ts — both changed. The aggregate ' +
+      'exported surface is unchanged, so a per-file diff (the old behavior) would false-🔴; aggregation ' +
+      'must keep this clean.',
+    files: {
+      'src/a.ts': `export const other = 1;\n`,
+      'src/b.ts': `export const TOKEN = 'x';\n`,
+    },
+    baseFiles: {
+      'src/a.ts': `export const other = 1;\nexport const TOKEN = 'x';\n`,
+      'src/b.ts': ``,
+    },
+    base: 'BASE',
+    changed: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }],
+    claims: ['no-public-api-change'],
+  },
+  {
+    id: 'D11-net-export-removed-no-move',
+    label: 'defect',
+    description:
+      'Claims "no-public-api-change" but genuinely removes an export — `TOKEN` is gone from src/a.ts and ' +
+      'not re-added in src/b.ts (the other changed file). Aggregation across changed files still reports a ' +
+      'net -TOKEN, so this is caught (the defect direction the aggregation change must preserve).',
+    files: {
+      'src/a.ts': `export const other = 1;\n`,
+      'src/b.ts': `export const unrelated = 2;\n`,
+    },
+    baseFiles: {
+      'src/a.ts': `export const other = 1;\nexport const TOKEN = 'x';\n`,
+      'src/b.ts': ``,
+    },
+    base: 'BASE',
+    changed: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }],
+    claims: ['no-public-api-change'],
   },
 ];

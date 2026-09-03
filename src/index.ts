@@ -9,12 +9,23 @@ import { buildReport } from './report/render.js';
 import type { Analyzer, AnalyzerContext, Report } from './types.js';
 
 export type { Analyzer, AnalyzerContext, ChangedFile, Claim, Finding, Report, Verdict } from './types.js';
-export { analyzers, assertionFreeTest, hallucinatedSymbol, claimReconciliation } from './analyzers/index.js';
+export { analyzers, assertionFreeTest, hallucinatedSymbol, riskyDiffNoTest, commentCodeDrift, claimReconciliation } from './analyzers/index.js';
 export { recognizedClaims } from './analyzers/claimReconciliation.js';
 export { parseClaims, type ParseClaimsOptions } from './claims.js';
+export {
+  buildPrompt,
+  extractClaimsFromResponse,
+  renderClaimsBlock,
+  runPropose,
+  PROPOSABLE_CLAIMS,
+  type ProposeProvider,
+  type FetchLike,
+  type RunProposeOptions,
+  type RunProposeResult,
+} from './propose.js';
 export { parseUnifiedDiff } from './diff/parseUnifiedDiff.js';
 export { getChangedFiles, makeContext, type DiffSource } from './diff/gitDiff.js';
-export { buildReport, exitCode, renderJson, renderMarkdown } from './report/render.js';
+export { buildReport, exitCode, renderJson, renderMarkdown, renderSarif } from './report/render.js';
 
 export interface RunOptions {
   analyzers?: Analyzer[];

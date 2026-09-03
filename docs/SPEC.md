@@ -38,6 +38,10 @@ These are load-bearing. Every analyzer and every line of the gate logic must obe
 
 1. **Zero LLM in the verification path.** A model may *propose* a claim to check; a model may never
    *adjudicate* whether a check passed. The thing that flips a build red is always deterministic code.
+   _(Realized concretely by `tribunal propose`, a separate subcommand that emits a ```` ```tribunal ````
+   claims block for the deterministic `tribunal check` to adjudicate. `propose` never imports a verifier,
+   and any unrecognized key it emits degrades to `UNVERIFIED` — so the LLM path cannot manufacture a
+   `CONTRADICTED` no matter what it returns.)_
 2. **Three verdicts, always:** `PASS` · `UNVERIFIED` · `CONTRADICTED`.
 3. **Gate ONLY on `CONTRADICTED`.** The absence of `CONTRADICTED` never blocks. `UNVERIFIED` is loud
    but non-blocking. This is the fails-safe guarantee.
@@ -93,7 +97,21 @@ the claim layer exists.
 |----|-----------------|--------|
 | `assertion-free-test` | tests added/changed by the PR that contain **no assertion** and can never fail | ✅ **built (M0)** |
 | `hallucinated-symbol` | imports the PR added that reference a module path or named export that **doesn't exist** (identifier/call resolution is a later extension) | ✅ **built (M1 — import subset)** |
-| `comment-code-drift` | a comment/docstring that references code which changed (conservative proxy only) | ▶ later |
+| `risky-diff-no-test` | a diff that touches a security-relevant area (auth, crypto, payments, …) but adds **no correlated asserting test** — the SPEC §3.7 "silence is not an escape hatch" signal | ✅ **built (signal-only)** |
+| `comment-code-drift` | a comment/docstring that references a symbol whose definition changed in the diff (body edit, rename, removal), where the comment was not freshly added | ✅ **built (signal-only)** |
+
+> **`comment-code-drift` is a signal analyzer, never a gate.** Comment staleness is a *semantic*
+> judgement, and §3.4 forbids semantic `CONTRADICTED` — so it emits only `PASS`/`UNVERIFIED`, never
+> `CONTRADICTED`. It scans comments in the changed file *and* other changed files for mentions of a
+> changed symbol's exact identifier token, and skips comments on freshly-added lines (a new comment is
+> unlikely stale — the key false-positive cut). It is safe to run under `--hard-fail`: it cannot cause a
+> false red.
+
+> **`risky-diff-no-test` is a signal analyzer, never a gate.** "Is this code risky?" is a *semantic*
+> judgement, and §3.4 forbids semantic `CONTRADICTED` — so it emits only `PASS` / `UNVERIFIED`, never
+> `CONTRADICTED`. It is therefore safe to run under `--hard-fail`: it cannot cause a false red. The
+> value is that a risky diff with no test becomes a loud, non-blocking finding even when the agent
+> said nothing at all (§3.7: the dominant adversarial strategy is silence).
 
 ### 5b. Claim-reconciliation analyzers — the durable moat
 Parse discrete claims → map each to a **deterministic** verifier. Extraction is **parsing, not NLU**:
